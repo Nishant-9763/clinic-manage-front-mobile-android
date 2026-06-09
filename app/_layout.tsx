@@ -1,56 +1,63 @@
-import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import 'react-native-reanimated';
+import { Stack, Redirect } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { MD3LightTheme, Provider as PaperProvider } from 'react-native-paper';
+import { View, ActivityIndicator } from 'react-native';
+import { useAuthStore } from '../src/store/useAuthStore';
+import { useClinicStore } from '../src/store/useClinicStore';
 
-import { useColorScheme } from '@/components/useColorScheme';
-
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
-
-export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
-};
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
+// Prevent splash screen auto hide
 SplashScreen.preventAutoHideAsync();
 
+const theme = {
+  ...MD3LightTheme,
+  colors: {
+    ...MD3LightTheme.colors,
+    primary: '#0ea5e9',
+    secondary: '#10b981',
+    tertiary: '#14b8a6',
+    background: '#f8fafc',
+    surface: '#ffffff',
+  },
+};
+
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+  const { isAuthenticated, isLoading: authLoading, initializeAuth } = useAuthStore();
+  const { isLoading: dbLoading, initializeDb } = useClinicStore();
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    async function init() {
+      try {
+        await initializeAuth();
+        await initializeDb();
+      } catch (e) {
+        console.error('Initialization error', e);
+      } finally {
+        await SplashScreen.hideAsync();
+      }
     }
-  }, [loaded]);
+    init();
+  }, [initializeAuth, initializeDb]);
 
-  if (!loaded) {
-    return null;
+  const isLoading = authLoading || dbLoading;
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+        <ActivityIndicator size="large" color="#0ea5e9" />
+      </View>
+    );
   }
 
-  return <RootLayoutNav />;
-}
-
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+    <PaperProvider theme={theme}>
+      <Stack screenOptions={{ headerShown: false }}>
+        {isAuthenticated ? (
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        ) : (
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        )}
       </Stack>
-    </ThemeProvider>
+    </PaperProvider>
   );
 }
